@@ -37,10 +37,10 @@ err_cols = ("e_pmRA", "e_pmDE", "e_Plx")
 PCAdims = 3
 
 # Define the 'min_samples' values used by OPTICS as: (min, max, step)
-min_samples_rng = (10, 60, 20)
+min_samples_rng = (10, 60, 2)
 # Number of times the data will be re-sampled (given its uncertainties) and
 # processed again with OPTICS
-Nruns = 1
+Nruns = 5
 
 # This is the most important parameter in the method, as it determines how the
 # final 'eps' value is selected. The 'perc_cut' parameter means

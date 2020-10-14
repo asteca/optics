@@ -128,7 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-input/*.dat
-output/*.png
-output/*.dat
+input/*
+output/*
 

@@ -32,14 +32,25 @@ id_col = "ID"
 # These columns will be used by the membership probabilities method
 data_cols = ("pmRA", "pmDE", "Plx")
 err_cols = ("e_pmRA", "e_pmDE", "e_Plx")
+ndim = len(data_cols)
 # Number of PCA dimensions to use
 PCAdims = 3
 
+# OPTICS: Ordering Points To Identify the Clustering Structure
+# Mihael Ankerst, Markus M. Breunig, Hans-Peter Kriegel, Jörg Sander (1999):
+# "..the reachability-plot is rather insensitive to the input parameters of the
+# method, i.e. the generating distance \epsilon and the value for MinPts.
+# Roughly speaking, the values have just to be "large" enough to yield a good
+# result. The concrete values are not crucial because there is a broad
+# range of possible values for which we always can see the clustering
+# structure of a data set when looking at the corresponding
+# reachability-plot."
+
 # Define the 'min_samples' values used by OPTICS as: (min, max, step)
-min_samples_rng = (10, 60, 2)
+min_samples_rng = (min(2 * ndim, 10), 100, 2)
 # Number of times the data will be re-sampled (given its uncertainties) and
 # processed again with OPTICS
-Nruns = 5
+Nruns = 1
 
 # This is the most important parameter in the method, as it determines how the
 # final 'eps' value is selected. The 'perc_cut' parameter means
@@ -64,6 +75,7 @@ def main():
         probs_dict = {"ID": data_id}
 
         # For all the 'min_samples' values in 'min_samples_rng'
+        no_outliers = False
         for min_samples in np.arange(
                 min_samples_rng[0], min_samples_rng[1], min_samples_rng[2]):
             print("min_sample={}".format(min_samples))
@@ -78,8 +90,12 @@ def main():
                 # Apply PCA reduction
                 data_pca = dimReduc(data_arr, PCAdims)
 
-                #
+                # Obtain OPTICS model
                 model_OPTIC = runOPTICS(data_pca, min_samples)
+                labels = model_OPTIC.labels_[model_OPTIC.ordering_]
+                if (labels == -1).sum() == 0:
+                    no_outliers = True
+                    break
 
                 # Auto eps selection
                 eps_final = findEps(data_pca, model_OPTIC, perc_cut)
@@ -100,6 +116,9 @@ def main():
                         j += 1
                 probs_all.append(probs)
 
+            if no_outliers is True:
+                print("No more outliers. Breaking")
+                break
             probs_dict[str(min_samples)] = np.round(np.mean(probs_all, 0), 3)
 
         # Estimate mean probabilities
@@ -162,14 +181,6 @@ def findEps(data, model_OPTIC, perc_cut, eps_step=0.005):
     # neighborhood of the other".
     reachability = model_OPTIC.reachability_[model_OPTIC.ordering_]
 
-    # Select the center of the cluster using the 1th percentile of stars with
-    # the smallest reachability values
-    eps_min = np.percentile(reachability, 1)
-    data_msk = mskNoise(eps_min)
-    # The mean of these points is considered to be the center of the cluster
-    # we are looking for
-    center = np.array([data_msk.mean(0)])
-
     # Go through (almost) all the 'eps' values, starting from the smallest
     # value larger that the minimum eps (+ eps_step).
     # At each step:
@@ -181,6 +192,10 @@ def findEps(data, model_OPTIC, perc_cut, eps_step=0.005):
             reachability.min() + eps_step,
             np.percentile(reachability, 95), eps_step):
 
+        # Select the center of the cluster as the mean of the points below
+        # this eps_c value.
+        center = np.array([mskNoise(eps_c).mean(0)])
+
         # Distance from the estimated members (i.e., data the noise) to the
         # center of the cluster (defined before this 'for' block).
         data_msk = mskNoise(eps_c)
@@ -191,8 +206,6 @@ def findEps(data, model_OPTIC, perc_cut, eps_step=0.005):
         # Percentile of the distances using the 'perc_cut' value
         perc_dist = np.percentile(dist_c, perc_cut)
 
-        # print(eps_c, len(mskNoise(eps_c)), max_dist, np.percentile(dist_c, (20, 40, 60, 80)))
-
         # Breaking condition: if the difference between the maximum distance
         # and the percentile distance is larger than the eps_c value.
         # The idea is to use an 'eps' value where the member further away from
@@ -202,7 +215,6 @@ def findEps(data, model_OPTIC, perc_cut, eps_step=0.005):
         # selected 'eps' values, i.e fewer members. This is because a smaller
         # 'perc_cut' is more restrictive
         if eps_c < max_dist - perc_dist:
-            # print("selected eps:", eps_c)
             break
 
     return eps_c
@@ -220,13 +232,13 @@ def runOPTICS(data, min_samples):
     # Fit the model
     model_OPTIC.fit(data)
 
-    import matplotlib.pyplot as plt
-    space = np.arange(len(data))
-    reachability = model_OPTIC.reachability_[model_OPTIC.ordering_]
-    labels = model_OPTIC.labels_[model_OPTIC.ordering_]
-    # plt.plot(space[labels != -1], reachability[labels != -1], 'g.', alpha=0.7)
-    plt.plot(space[labels == -1], reachability[labels == -1], 'k.', alpha=0.5)
-    plt.show()
+    # import matplotlib.pyplot as plt
+    # space = np.arange(len(data))
+    # reachability = model_OPTIC.reachability_[model_OPTIC.ordering_]
+    # labels = model_OPTIC.labels_[model_OPTIC.ordering_]
+    # plt.plot(space[labels != -1], reachability[labels != -1], 'g.', alpha=0.25)
+    # plt.plot(space[labels == -1], reachability[labels == -1], 'k.', alpha=0.25)
+    # plt.show()
 
     return model_OPTIC
 

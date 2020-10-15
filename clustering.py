@@ -6,7 +6,6 @@ import sklearn.cluster as skclust
 from pathlib import Path
 from astropy.io import ascii
 from astropy.table import Table
-from modules.makePlots import makePlot
 
 
 """
@@ -116,8 +115,6 @@ def main():
         fout = 'output/' + fname + "_probs." + fext
         ascii.write(probs_dict, fout, overwrite=True)
 
-        makePlot(perc_cut, data_all, probs_mean, fname)
-
 
 def findEps(data, model_OPTIC, perc_cut, eps_step=0.005):
     """
@@ -129,6 +126,9 @@ def findEps(data, model_OPTIC, perc_cut, eps_step=0.005):
     Amin Karami and Ronnie Johansson. Choosing dbscan parameters
     automatically using differential evolution. International Journal
     of Computer Applications, 91(7), 2014
+
+    Clustering Using OPTICS
+    https://towardsdatascience.com/clustering-using-optics-cac1d10ed7a7
 
     OPTICS attributes used here:
 
@@ -220,13 +220,13 @@ def runOPTICS(data, min_samples):
     # Fit the model
     model_OPTIC.fit(data)
 
-    # import matplotlib.pyplot as plt
-    # space = np.arange(len(data))
-    # reachability = model_OPTIC.reachability_[model_OPTIC.ordering_]
-    # labels = model_OPTIC.labels_[model_OPTIC.ordering_]
-    # plt.plot(space[labels != -1], reachability[labels != -1], 'g', alpha=0.7)
-    # plt.plot(space[labels == -1], reachability[labels == -1], 'k.', alpha=0.1)
-    # plt.show()
+    import matplotlib.pyplot as plt
+    space = np.arange(len(data))
+    reachability = model_OPTIC.reachability_[model_OPTIC.ordering_]
+    labels = model_OPTIC.labels_[model_OPTIC.ordering_]
+    # plt.plot(space[labels != -1], reachability[labels != -1], 'g.', alpha=0.7)
+    plt.plot(space[labels == -1], reachability[labels == -1], 'k.', alpha=0.5)
+    plt.show()
 
     return model_OPTIC
 

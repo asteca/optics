@@ -3,16 +3,35 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import AutoMinorLocator
+from astropy.table import Table
+from astropy.io import ascii
+from clustering import perc_cut, readFiles, dataExtract
 
 
-def makePlot(
-    perc_cut, data_all, probs_mean, fname, prob_cut=0.75,
-        Plx_offset=0.029):
+prob_cut = 0.5
+
+
+def main():
+    """
+    """
+    files = readFiles()
+    for file_path in files:
+        fname = file_path.parts[-1].split('.')[0]
+        data_all = dataExtract(file_path)[0]
+
+        fname, fext = file_path.parts[-1].split('.')
+        fprobs = 'output/' + fname + '_probs.' + fext
+        probs_mean = ascii.read(fprobs, header_start=0)['probs_mean']
+
+        makePlot(data_all, probs_mean, fname)
+
+
+def makePlot(data_all, probs_mean, fname, Plx_offset=0.029):
     """
     Make plots using the final probabilities in the "_probs.dat" files.
     """
-    prob_cut = min(prob_cut, probs_mean.max())
-    msk_memb = probs_mean >= prob_cut
+    # prob_cut = min(prob_cut, probs_mean.max())
+    msk_memb = probs_mean >= min(prob_cut, probs_mean.max())
 
     fig = plt.figure(figsize=(15, 10))
     G = gridspec.GridSpec(4, 3)
@@ -167,3 +186,7 @@ def makePlot(
     fig.tight_layout()
     plt.savefig(file_out, dpi=150, bbox_inches='tight')
     plt.close()
+
+
+if __name__ == '__main__':
+    main()

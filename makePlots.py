@@ -3,11 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import AutoMinorLocator
-from astropy.table import Table
 from astropy.io import ascii
 from clustering import perc_cut, readFiles, dataExtract
 
 
+# This parameter determines where the "probability cut" is performed, i.e,
+# which stars are considered to be real members
 prob_cut = 0.5
 
 

@@ -85,8 +85,12 @@ def main():
             for _ in range(Nruns):
                 print("  Re-sample N={}".format(_))
 
-                # Re-sample data
-                data_arr = reSampleData(data_c, data_err)
+                # Use non-resampled values in the first run
+                if _ == 0:
+                    data_arr = data_c
+                else:
+                    # Re-sample data
+                    data_arr = reSampleData(data_c, data_err)
                 # Apply PCA reduction
                 data_pca = dimReduc(data_arr, PCAdims)
 

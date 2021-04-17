@@ -8,46 +8,22 @@ from astropy.io import ascii
 from astropy.table import Table
 
 
-"""
-This method uses the OPTICS algorithm to estimate membership probabilities
-when the cluster occupies most of the observed frame, and thus there is no
-identifiable overdensity in the (x, y) coordinates space.
-
-Both pyUPMASK and the Bayesian method in ASteCA require that the cluster
-should show an overdensity in the coordinates space, and hence are not
-appropriate for the cases handled by this method.
-
-The OPTICS[1] algorithm in this method works on the parallax and proper motions
-space, looking for stars in regions of overdensity. Hence, no field region
-in coordinates space is required at all.
-
-
-[1]:
-https://scikit-learn.org/stable/modules/generated/sklearn.cluster.OPTICS.html
-"""
-
 # Fixed parameters
 # IDs column
-id_col = "ID"
+id_col = "source_id"
+# "ID"
 # These columns will be used by the membership probabilities method
-data_cols = ("pmRA", "pmDE", "Plx")
-err_cols = ("e_pmRA", "e_pmDE", "e_Plx")
+data_cols = ('pmra', 'pmdec', 'parallax')
+# ("pmRA", "pmDE", "Plx")
+err_cols = ()
+# ("e_pmRA", "e_pmDE", "e_Plx")
 ndim = len(data_cols)
 # Number of PCA dimensions to use
 PCAdims = 3
 
-# OPTICS: Ordering Points To Identify the Clustering Structure
-# Mihael Ankerst, Markus M. Breunig, Hans-Peter Kriegel, Jörg Sander (1999):
-# "..the reachability-plot is rather insensitive to the input parameters of the
-# method, i.e. the generating distance \epsilon and the value for MinPts.
-# Roughly speaking, the values have just to be "large" enough to yield a good
-# result. The concrete values are not crucial because there is a broad
-# range of possible values for which we always can see the clustering
-# structure of a data set when looking at the corresponding
-# reachability-plot."
-
 # Define the 'min_samples' values used by OPTICS as: (min, max, step)
-min_samples_rng = (min(2 * ndim, 10), 100, 2)
+min_samps, max_samps, step = min(2 * ndim, 10), 100, 2
+
 # Number of times the data will be re-sampled (given its uncertainties) and
 # processed again with OPTICS
 Nruns = 1
@@ -65,6 +41,7 @@ perc_cut = 90
 def main():
     """
     """
+    min_samples_rng = np.arange(min_samps, max_samps, step)
     # Process all files in 'input_folder'
     files = readFiles()
     for file_path in files:
@@ -76,8 +53,7 @@ def main():
 
         # For all the 'min_samples' values in 'min_samples_rng'
         no_outliers = False
-        for min_samples in np.arange(
-                min_samples_rng[0], min_samples_rng[1], min_samples_rng[2]):
+        for min_samples in min_samples_rng:
             print("min_sample={}".format(min_samples))
 
             # For all the re-sample runs
@@ -87,14 +63,17 @@ def main():
 
                 # Use non-resampled values in the first run
                 if _ == 0:
-                    data_arr = data_c
+                    # data_arr = data_c
+                    data_arr = np.array([data_c[_] for _ in data_c.columns]).T
                 else:
                     # Re-sample data
                     data_arr = reSampleData(data_c, data_err)
                 # Apply PCA reduction
+                print("  PCA dimension reduction...")
                 data_pca = dimReduc(data_arr, PCAdims)
 
                 # Obtain OPTICS model
+                print("  OPTICS model...")
                 model_OPTIC = runOPTICS(data_pca, min_samples)
                 labels = model_OPTIC.labels_[model_OPTIC.ordering_]
                 if (labels == -1).sum() == 0:
@@ -102,9 +81,11 @@ def main():
                     break
 
                 # Auto eps selection
+                print("  eps selection...")
                 eps_final = findEps(data_pca, model_OPTIC, perc_cut)
 
                 # DBSCAN labels
+                print("  DBSCAN labels...")
                 labels_dbs = skclust.cluster_optics_dbscan(
                     reachability=model_OPTIC.reachability_,
                     core_distances=model_OPTIC.core_distances_,
@@ -263,7 +244,7 @@ def dataExtract(file_path):
     """
     """
     # Read data from file
-    print("{:<21}: {}".format("\nFile", file_path.parts[-1]))
+    print("{:<21}: {}".format("\nReading file...", file_path.parts[-1]))
     data_all = Table.read(
         file_path, format='ascii', fill_values=[('', '0'), ('nan', '0')])
     N_d = len(data_all)
@@ -281,8 +262,9 @@ def dataExtract(file_path):
         data = data_all
 
     # Extract ID, data, and its uncertainties
-    data_id, data_c, data_err = data_all[id_col], data[data_cols],\
-        data[err_cols]
+    data_id, data_c, data_err = data_all[id_col], data[data_cols], []
+    if err_cols:
+        data_err = data[err_cols]
 
     return data_all, data_id, data_c, data_err, msk_accpt
 

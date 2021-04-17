@@ -1,15 +1,21 @@
 
 import numpy as np
+from scipy.stats import median_abs_deviation as MAD
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import AutoMinorLocator
 from astropy.io import ascii
-from clustering import perc_cut, readFiles, dataExtract
+from optics_clustering import perc_cut, readFiles, dataExtract
 
+
+# Names of required columns in the input data file
+col_names = {
+    'ra': 'ra', 'dec': 'dec', 'pmra': 'pmra', 'pmde': 'pmdec',
+    'plx': 'parallax'}
 
 # This parameter determines where the "probability cut" is performed, i.e,
 # which stars are considered to be real members
-prob_cut = 0.5
+prob_cut = 0.75
 
 
 def main():
@@ -47,7 +53,7 @@ def makePlot(data_all, probs_mean, fname, Plx_offset=0.029):
     plt.suptitle("Percentile distance used to estimate the 'eps': {}".format(
         perc_cut))
 
-    data_all['Plx'] += Plx_offset
+    data_all[col_names['plx']] += Plx_offset
 
     # # Reachability plot
     # space = np.arange(len(data))
@@ -84,11 +90,14 @@ def makePlot(data_all, probs_mean, fname, Plx_offset=0.029):
     for pp in np.arange(.05, .95, .01):
         msk = probs_mean >= pp
         plx_prob.append([
-            pp, data_all['Plx'][msk].mean(), data_all['Plx'][msk].std()])
+            pp, data_all[col_names['plx']][msk].mean(),
+            data_all[col_names['plx']][msk].std()])
         pmRA_prob.append([
-            pp, data_all['pmRA'][msk].mean(), data_all['pmRA'][msk].std()])
+            pp, data_all[col_names['pmra']][msk].mean(),
+            data_all[col_names['pmra']][msk].std()])
         pmDE_prob.append([
-            pp, data_all['pmDE'][msk].mean(), data_all['pmDE'][msk].std()])
+            pp, data_all[col_names['pmde']][msk].mean(),
+            data_all[col_names['pmde']][msk].std()])
 
     plx_prob, pmRA_prob, pmDE_prob = [
         np.array(_).T for _ in (plx_prob, pmRA_prob, pmDE_prob)]
@@ -117,62 +126,71 @@ def makePlot(data_all, probs_mean, fname, Plx_offset=0.029):
     ax3.set_ylabel(r'$Plx$')
     ax3.set_xlabel(r'$P_{cut}$')
 
-    ax4.set_title("N={}".format(len(data_all['RA_ICRS'][msk_memb])))
+    ax4.set_title("N={}".format(len(data_all[col_names['ra']][msk_memb])))
     ax4.scatter(
-        data_all['RA_ICRS'][msk_memb], data_all['DE_ICRS'][msk_memb],
+        data_all[col_names['ra']][msk_memb],
+        data_all[col_names['dec']][msk_memb],
         marker='o', edgecolor='w', lw=.3, zorder=5)
     ax4.plot(
-        data_all['RA_ICRS'][~msk_memb],
-        data_all['DE_ICRS'][~msk_memb], 'k.', alpha=0.3, zorder=1)
+        data_all[col_names['ra']][~msk_memb],
+        data_all[col_names['dec']][~msk_memb], 'k.', alpha=0.3, zorder=1)
     ax4.set_xlabel('RA')
     ax4.set_ylabel('DE')
-    ax4.set_xlim(max(data_all['RA_ICRS']), min(data_all['RA_ICRS']))
-    ax4.set_ylim(min(data_all['DE_ICRS']), max(data_all['DE_ICRS']))
+    ax4.set_xlim(
+        max(data_all[col_names['ra']]), min(data_all[col_names['ra']]))
+    ax4.set_ylim(
+        min(data_all[col_names['dec']]), max(data_all[col_names['dec']]))
 
     # PMs plot
     pmRA_mean = (
-        data_all['pmRA'][msk_memb] /
-        np.cos(np.deg2rad(data_all['pmDE'][msk_memb]))).mean()
-    pmDE_mean = data_all['pmDE'][msk_memb].mean()
+        data_all[col_names['pmra']][msk_memb] /
+        np.cos(np.deg2rad(data_all[col_names['pmde']][msk_memb]))).mean()
+    pmDE_mean = data_all[col_names['pmde']][msk_memb].mean()
     ax5.set_title(r"$(\mu_{\alpha}, \mu_{\delta})=$" +
                   "({:.3f}, {:.3f})".format(pmRA_mean, pmDE_mean))
     ax5.scatter(
-        data_all['pmRA'][msk_memb], data_all['pmDE'][msk_memb], marker='.',
+        data_all[col_names['pmra']][msk_memb],
+        data_all[col_names['pmde']][msk_memb], marker='.',
         edgecolor='w', lw=.1, alpha=.7, zorder=5)
     ax5.plot(
-        data_all['pmRA'][~msk_memb], data_all['pmDE'][~msk_memb],
+        data_all[col_names['pmra']][~msk_memb],
+        data_all[col_names['pmde']][~msk_memb],
         'k+', alpha=0.3, zorder=1)
     ax5.set_xlabel(r'$\mu_{\alpha} \cos \delta$ [mas/yr]')
     ax5.set_ylabel(r'$\mu_{\delta}$ [mas/yr]')
-    xmin, xmax = np.percentile(data_all['pmRA'][~msk_memb], (25, 75))
-    ymin, ymax = np.percentile(data_all['pmDE'][~msk_memb], (25, 75))
-    xclmin = data_all['pmRA'][msk_memb].mean() -\
-        5. + data_all['pmRA'][msk_memb].std()
-    xclmax = data_all['pmRA'][msk_memb].mean() +\
-        5. + data_all['pmRA'][msk_memb].std()
-    yclmin = data_all['pmDE'][msk_memb].mean() -\
-        5. + data_all['pmDE'][msk_memb].std()
-    yclmax = data_all['pmDE'][msk_memb].mean() +\
-        5. + data_all['pmDE'][msk_memb].std()
+    xmin, xmax = np.percentile(
+        data_all[col_names['pmra']][~msk_memb], (25, 75))
+    ymin, ymax = np.percentile(
+        data_all[col_names['pmde']][~msk_memb], (25, 75))
+    pmra_MAD = MAD(data_all[col_names['pmra']][msk_memb], scale='normal')
+    pmde_MAD = MAD(data_all[col_names['pmde']][msk_memb], scale='normal')
+    xclmin = data_all[col_names['pmra']][msk_memb].mean() - 5. + pmra_MAD
+    xclmax = data_all[col_names['pmra']][msk_memb].mean() + 5. + pmra_MAD
+    yclmin = data_all[col_names['pmde']][msk_memb].mean() - 5. + pmde_MAD
+    yclmax = data_all[col_names['pmde']][msk_memb].mean() + 5. + pmde_MAD
     ax5.set_xlim(max(xmax, xclmax), min(xmin, xclmin))
     ax5.set_ylim(min(ymin, yclmin), max(ymax, yclmax))
 
     # Plxs plot
     ax6.set_title("Plx offset: +{}".format(Plx_offset))
-    xmin = np.percentile(data_all['Plx'][msk_memb], 1) -\
-        3. * data_all['Plx'][msk_memb].std()
-    xmax = np.percentile(data_all['Plx'][msk_memb], 95) +\
-        3. * data_all['Plx'][msk_memb].std()
+    xmin = np.percentile(data_all[col_names['plx']][msk_memb], 1) -\
+        3. * data_all[col_names['plx']][msk_memb].std()
+    xmax = np.percentile(data_all[col_names['plx']][msk_memb], 95) +\
+        3. * data_all[col_names['plx']][msk_memb].std()
     msk1 = np.logical_and.reduce([
-        (data_all['Plx'] > -2), (data_all['Plx'] < 4), (msk_memb)])
+        (data_all[col_names['plx']] > -2), (data_all[col_names['plx']] < 4),
+        (msk_memb)])
     msk2 = np.logical_and.reduce([
-        (data_all['Plx'] > -2), (data_all['Plx'] < 4), (~msk_memb)])
-    ax6.hist(data_all['Plx'][msk1], 20, density=True, alpha=.7, zorder=5)
+        (data_all[col_names['plx']] > -2), (data_all[col_names['plx']] < 4),
+        (~msk_memb)])
     ax6.hist(
-        data_all['Plx'][msk2], 75, color='k', alpha=0.3, density=True,
-        zorder=1)
-    plx_mean = data_all['Plx'][msk_memb].mean()
-    plx_16, plx_84 = np.percentile(data_all['Plx'][msk_memb], (16, 84))
+        data_all[col_names['plx']][msk1], 20, density=True, alpha=.7, zorder=5)
+    ax6.hist(
+        data_all[col_names['plx']][msk2], 75, color='k', alpha=0.3,
+        density=True, zorder=1)
+    plx_mean = data_all[col_names['plx']][msk_memb].mean()
+    plx_16, plx_84 = np.percentile(
+        data_all[col_names['plx']][msk_memb], (16, 84))
     ax6.axvline(
         plx_mean, c='r',
         label=r"$Plx_{{mean}}={:.3f}_{{{:.3f}}}^{{{:.3f}}}$".format(
